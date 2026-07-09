@@ -1,0 +1,201 @@
+// ============================================================================
+// Project: PipAsp-freefem
+// Description: Harmonic simulation of a 2D elastic specimen under sinusoidal
+//              pressure (pipette aspiration setup).
+//
+// Author: Raphael Lamprecht 
+// License: MIT License
+// ============================================================================
+
+// Define boundary labels
+int pipetteInnerBoundary = 1;
+int pipetteContactBoundary = 2;
+int freeBoundaries = 3;
+int bottomBoundary = 4; 
+int centralLineBoundary = 5; 
+
+// Geometry parameters
+real radiusPipetteInner = 1.5e-03; // Inner radius of the pipette in m
+real radiusPipetteOuter = 2.5e-03; // Outer radius of the pipette in m
+real radiusDomain = 5.0e-02; // Domain length in x-direction in m 
+real heightDomain = 1.0e-02; // Domain height in y-direction in m 
+int nFine = 2.25e+04; // Number of elements fine in 1/m
+int nCoarse = 5.0e+03; // Number of elements coarse in 1/m
+bool adaptMesh = true; // Adapt mesh based on refinement criteria
+
+// Output file name
+string fileName = "displacement_harmonic.csv";
+
+// Mesh definition
+border innerTopBorder(t=0,radiusPipetteInner){x=t; y=0; label=pipetteInnerBoundary;}
+border pipetteContactBorder(t=radiusPipetteInner, radiusPipetteOuter){x=t; y=0; label=pipetteContactBoundary;}
+border outerTopBorder(t=radiusPipetteOuter, radiusDomain){x=t; y=0; label=freeBoundaries;}
+border rightBorder(t=0, -heightDomain){x=radiusDomain; y=t; label=freeBoundaries;}
+border bottomBorder(t=radiusDomain, 0){x=t; y=-heightDomain; label=bottomBoundary;}
+border centerBorder1(t=-heightDomain, -radiusPipetteOuter){x=0; y=t; label=centralLineBoundary;}
+border centerBorder2(t=-radiusPipetteOuter, 0){x=0; y=t; label=centralLineBoundary;}
+
+// Generate the mesh
+mesh Th = buildmesh(innerTopBorder(-radiusPipetteInner*nFine) 
+	+ pipetteContactBorder(-(radiusPipetteOuter-radiusPipetteInner)*nFine) 
+	+ outerTopBorder(-(radiusDomain-radiusPipetteOuter)*nCoarse) 
+	+ rightBorder(-heightDomain*nCoarse) 
+	+ bottomBorder(-radiusDomain*nCoarse) 
+	+ centerBorder2(-radiusPipetteOuter*nFine)
+	+ centerBorder1(-(heightDomain-radiusPipetteOuter)*nCoarse));
+
+// Mesh refinement
+if (adaptMesh){
+	// Definition of the refinement function
+	func refinementY  = exp(- 10e2 *  x^2 / (radiusPipetteOuter) - 5e3 *  (y)^2  / (heightDomain));
+
+	mesh ThOld = Th;
+
+	// Refine the mesh based on the function
+	Th = adaptmesh(ThOld, refinementY, hmax = 5e-3, hmin = 1e-4, nbsmooth=50, splitin2=1);
+};
+
+// Plot mesh
+plot(Th, wait = false, boundary=true);
+
+// Coordinates of the point where displacement is needed
+real x0 = 0.0e+00; // x-coordinate of the "measurement" point in m
+real y0 = 0.0e+00; // y-coordinate of the "measurement" point in m
+
+// Material properties 
+real E = 12e3; // Young's modulus in Pa
+real nu = 4.90e-01; // Poisson's ratio 
+real rho = 1.00e+03; // Density in kg/m^3
+real eta = 5.00e+00; // Viscous damping coefficient in Ns/m^2
+
+// Pressure parameters
+real pressureBoundary = 2.50e+01; // Amplitude of sinusoidal pressure in Pa
+
+// Frequency parameters
+real[int] frequencies = [0.00e+00, 7.0e+00, 9.00e+00, 1.10e+01, 1.40e+01, 1.80e+01, 2.40e+01, 3.00e+01, 3.80e+01, 4.90e+01, 6.20e+01, 7.90e+01, 1.01e+02, 1.28e+02, 1.64e+02, 2.08e+02, 2.65e+02, 3.38e+02, 4.31e+02, 5.49e+02, 7.00e+02]; // Frequencies in Hz
+real[int] omegas = 2 * pi * frequencies; // Angular frequency in rad/s
+
+// Lame parameters
+real mu = 1/(2*(1 + nu)) * E; // Shear modulus
+real lambda = nu/((1 + nu)*(1 - 2*nu)) * E; // First Lame parameter
+
+// Vectorial FE space
+fespace Vh1(Th, P2);
+fespace Vh(Th, [P2, P2]);
+
+// Define the complex FE space for displacements
+Vh <complex> [u1,u2], [v1,v2];
+
+// Initial values 
+real omega = omegas[0];
+real frequency = frequencies[0];
+Vh1 pressure = 0.00e+00;
+
+// Macros
+real sqrt2=sqrt(2.);
+macro epsilon(u1,u2) [dx(u1), dy(u2), u1/x, (dy(u1) + dx(u2))/sqrt2] //
+macro div(u,v) (dy(v) + dx(u) + u/x) //
+
+// Define the variational problem
+problem viscoelasticDeformation([u1,u2],[v1,v2]) =
+    // Elasticity term
+	int2d(Th)(
+        2 * pi * x * 
+	 	(2 * mu * epsilon(u1,u2)' * epsilon(v1,v2)
+	  	+ lambda * (div(u1,u2) * div(v1,v2))) 
+		)
+
+	// Density term
+	- int2d(Th)(2 * pi * x * 
+		omega^2 * rho * [u1,u2]' * [v1,v2]
+		)
+
+	// Viscous terms
+	+ int2d(Th)(2 * pi * x * 
+	 	1i * omega * 
+		2 * eta *  epsilon(u1,u2)'*epsilon(v1,v2) 
+		)
+
+	// Pressure term
+	- int1d(Th, pipetteInnerBoundary)(2* pi * x * 
+		(- pressureBoundary *  v2) 
+        )
+
+	// Displacement boundary conditions
+	+ on(pipetteContactBoundary, u1=0, u2=0) 
+	+ on(centralLineBoundary, u1=0)
+	+ on(bottomBoundary, u1=0, u2=0);
+
+// Array to store results
+real[int] uxValues(frequencies.n), uyValues(frequencies.n), pressureValues(frequencies.n), phaseValues(frequencies.n);
+
+// Frequency evolution
+for (int i = 0; i < frequencies.n; i++)
+{
+	// Frequency parameter
+	omega = omegas[i];
+	frequency = frequencies[i];
+
+	// Solve the problem
+	viscoelasticDeformation;
+
+	// Get displacements at (x0, y0)
+	real u1Real = real(u1(x0, y0));
+    real u1Imag = imag(u1(x0, y0));
+    real u2Real = real(u2(x0, y0));
+    real u2Imag = imag(u2(x0, y0));
+
+
+	// Compute the displacement magnitude
+	uxValues[i] = sqrt(u1Real*u1Real + u1Imag*u1Imag);
+    uyValues[i] = sqrt(u2Real*u2Real + u2Imag*u2Imag);
+    pressureValues[i] = pressureBoundary;
+	
+	// Compute the phase 
+	if (uyValues[i] <= 1e-30) // If displacements are effectively zero, set phase to zero
+	{
+		phaseValues[i] = 0; // Set phase to zero
+	}
+	else
+	{
+		phaseValues[i] = atan2(u2Imag, u2Real); // Calculate phase in radians
+	};
+
+    // Display results for current frequency
+    cout << "Frequency: " << frequency << " Hz, "
+         << "Displacement: (" << uxValues[i] << ", " << uyValues[i] << ") m, "
+         << "Pressure: " << pressureValues[i] << " Pa, "
+         << "Phase: " << phaseValues[i] << " rad" << endl;
+
+    // Compute displacement magnitude
+    fespace Vh2(Th, P1);
+    Vh2 u1Abs = sqrt(real(u1)*real(u1) + imag(u1)*imag(u1));
+    Vh2 u2Abs = sqrt(real(u2)*real(u2) + imag(u2)*imag(u2));
+    Vh2 uAbs = sqrt(u1Abs*u1Abs + u2Abs*u2Abs);
+
+    // Compute the moved mesh
+    real coeff = 1e2; // Coefficient for visualizing displacements (to make them visible in the plot)
+    mesh Th2 = movemesh(Th, [x + coeff * u1Abs,  y + coeff *  u2Abs]);
+    fespace Vh3(Th2, P1); // Interpolate the displacement magnitude onto the moved mesh
+    Vh3 uAbsMoved = uAbs; 
+
+    // Display the displacement magnitude on the moved mesh
+    plot(Th2, uAbsMoved, fill=true, wait=false, cmm="Displacement Magnitude at " + frequency + " Hz", bb=[[-1e-4, -3e-3],[2e-3, 5e-4]]);
+
+    // Display the phase on the original mesh
+    // Vh2 phase = atan2(imag(u2), real(u2));
+    // plot(Th, phase, fill=true, wait=false, cmm="Phase of u2 at " + frequency + " Hz",  value=true);
+};
+
+// Export central displacement to file
+ofstream file(fileName);
+file << "f;ux;uy;p;phase\n";
+file.precision(12);
+for (int i = 0; i < frequencies.n; i++)
+{
+	file << frequencies[i] << ";"
+	<< uxValues[i] << ";" 
+	<< uyValues[i] << ";" 
+	<< pressureValues[i] << ";" 
+	<< phaseValues[i] << "\n";
+}
