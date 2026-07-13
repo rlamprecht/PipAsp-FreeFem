@@ -1,4 +1,4 @@
-# PipAsp FreeFem++
+# Pipette Aspiration in FreeFem++
 
 Axisymmetric harmonic viscoelastic simulation for a pipette aspiration setup, implemented in FreeFem++
 
@@ -10,11 +10,9 @@ The script `PipAsp_FreeFem.edp` solves frequency-domain displacement of a 2D axi
 
 
 ### Weak frormulation of the PDE
-$$
-    \int_{\Omega} 2\mu \, \varepsilon(\mathbf{u}) : \varepsilon(\mathbf{v}) + \int_{\Omega} \lambda \, (\nabla \cdot \mathbf{u}) (\nabla \cdot \mathbf{v}) + i\omega \int_{\Omega} 2\eta\, \varepsilon(\mathbf{u}) : \varepsilon(\mathbf{v}) - \int_{\Omega} \rho \, \omega^2 \, \mathbf{u} \cdot \mathbf{v}  
-    = \int_{\Gamma_P} (p_0 \cdot \mathbf{n})\cdot  \mathbf{v} 
-$$ 
-where:
+$$ \int_{\Omega} 2\mu  \varepsilon(\mathbf{u}) : \varepsilon(\mathbf{v}) + \int_{\Omega} \lambda  (\nabla \cdot \mathbf{u}) (\nabla \cdot \mathbf{v}) + i\omega \int_{\Omega} 2\eta  \varepsilon(\mathbf{u}) : \varepsilon(\mathbf{v}) - \int_{\Omega} \rho  \omega^2 \mathbf{u} \cdot \mathbf{v} = \int_{\Gamma_P} (p_0 \mathbf{n}) \cdot \mathbf{v} $$
+
+with:
 - $\Omega$: axisymmetric simulation domain
 - $\mathbf{u} = [u_r,u_z]$: complex displacement field (unknown)
 - $\mathbf{v}$: admissible test function
@@ -126,6 +124,9 @@ FreeFem++.exe "PipAsp_FreeFem.edp" -cd
 ```
 
 `-cd` runs with working directory set to the script directory, so output files are generated in the repository root.
+
+## Citation 
+-> Add conference here 
 
 ## License
 
