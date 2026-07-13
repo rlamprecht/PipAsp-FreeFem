@@ -1,6 +1,6 @@
-# PipAsp-freefem
+# PipAsp FreeFem++
 
-Axisymmetric harmonic viscoelastic simulation for a pipette-aspiration-style setup, implemented in FreeFem++
+Axisymmetric harmonic viscoelastic simulation for a pipette aspiration setup, implemented in FreeFem++
 
 ## Scope
 
@@ -8,47 +8,69 @@ The script `PipAsp_FreeFem.edp` solves frequency-domain displacement of a 2D axi
 
 ## Model Definition
 
-- Unknown field: complex displacement vector `[u1, u2]`.
-- Formulation: linear viscoelastic harmonic balance with inertia.
-- Axisymmetric weighting: all weak-form integrals include `2*pi*x`.
-- Frequency sweep: predefined list from 0 Hz to 700 Hz.
 
-Weak form components:
+### Weak frormulation of the PDE
+$$
+    \int_{\Omega} 2\mu \, \varepsilon(\mathbf{u}) : \varepsilon(\mathbf{v}) + \int_{\Omega} \lambda \, (\nabla \cdot \mathbf{u}) (\nabla \cdot \mathbf{v}) + i\omega \int_{\Omega} 2\eta\, \varepsilon(\mathbf{u}) : \varepsilon(\mathbf{v}) - \int_{\Omega} \rho \, \omega^2 \, \mathbf{u} \cdot \mathbf{v}  
+    = \int_{\Gamma_P} (p_0 \cdot \mathbf{n})\cdot  \mathbf{v} 
+$$ 
+where:
+- $\Omega$: axisymmetric simulation domain
+- $\mathbf{u} = [u_r,u_z]$: complex displacement field (unknown)
+- $\mathbf{v}$: admissible test function
+- $\varepsilon(\mathbf{u})$: small-strain tensor of $\mathbf{u}$
+- $\mu,\lambda$: Lamé parameters (elastic shear and volumetric stiffness)
+- $\eta$: shear viscosity parameter (Kelvin--Voigt viscous contribution)
+- $\rho$: mass density
+- $\omega = 2\pi f$: angular frequency
+- $p_0$: pressure amplitude applied on $\Gamma_P$
+- $\Gamma_P$: pressured boundary with $\mathbf{n}$ the outward unit normal on $\Gamma_P$
 
-1. Elastic term with Lame parameters `mu`, `lambda`.
-2. Inertial term `-omega^2 * rho`.
-3. Viscous term `i * omega * eta`.
-4. Boundary traction on `pipetteInnerBoundary`.
+Term-by-term meaning:
+1. $\int_{\Omega} 2\mu\,\varepsilon(\mathbf{u}):\varepsilon(\mathbf{v})$ — elastic shear term 
+2. $\int_{\Omega} \lambda\,(\nabla\cdot\mathbf{u})(\nabla\cdot\mathbf{v})$ — elastic volumetric term
+3. $i\omega\int_{\Omega} 2\eta\,\varepsilon(\mathbf{u}):\varepsilon(\mathbf{v})$ — viscous damping term
+4. $-\int_{\Omega} \rho\,\omega^2\,\mathbf{u}\cdot\mathbf{v}$ — inertial term
+5. $\int_{\Gamma_P}(p_0\,\mathbf{n})\cdot\mathbf{v}$ — external virtual work of boundary pressure
+
+### Implementation:
+- Unknown field: complex displacement vector `[u1, u2]`
+- Formulation: linear viscoelastic harmonic balance with inertia
+- Axisymmetric weighting: all weak-form integrals include `2*pi*x`
+- Frequency sweep: predefined list from 0 Hz to 750 Hz
+
 
 ## Geometry and Mesh
 
+![Geometry](boundaries.png) 
+
 Geometry parameters in SI units:
 
-- `radiusPipetteInner = 1.5e-3 m`
-- `radiusPipetteOuter = 2.5e-3 m`
-- `radiusDomain = 5.0e-2 m`
-- `heightDomain = 1.0e-2 m`
+- `radiusPipetteInner`: $r_i = 1.5\,\text{mm}$ 
+- `radiusPipetteOuter`: $r_o = 2.5\,\text{mm}$ 
+- `radiusDomain`: $r_s = 50\,\text{mm}$ 
+- `heightDomain`: $h_s = 10\,\text{mm}$ 
 
 Discretization controls:
 
 - `nFine = 2.25e4 1/m`
 - `nCoarse = 5.0e3 1/m`
-- Optional adaptive refinement enabled by `adaptMesh = true`.
+- Optional adaptive refinement enabled by `adaptMesh = true`
 
 Boundary labels:
 
-- `1`: pipetteInnerBoundary
-- `2`: pipetteContactBoundary
-- `3`: freeBoundaries
-- `4`: bottomBoundary
-- `5`: centralLineBoundary
+- `1`: pipetteInnerBoundary: pressure boundary
+- `2`: pipetteContactBoundary: fixed displacement in r,z-direction 
+- `3`: freeBoundaries: traction free
+- `4`: bottomBoundary: fixed displacement in r,z-direction 
+- `5`: centralLineBoundary: fixed displacement in r-direction 
 
 ## Material and Loading Parameters
 
 - `E = 12e3 Pa`
-- `nu = 4.99e-1`
+- `nu = 4.90e-1`
 - `rho = 1.00e3 kg/m^3`
-- `eta = 5.00 Ns/m`
+- `eta = 5.00 P s`
 - `pressureBoundary = 25 Pa` (harmonic amplitude)
 
 Derived quantities:
@@ -59,13 +81,12 @@ Derived quantities:
 
 ## Boundary Conditions
 
-- On `pipetteContactBoundary`: `u1 = 0`, `u2 = 0`
-- On `centralLineBoundary`: `u1 = 0` (axisymmetry condition)
-- On `bottomBoundary`: `u1 = 0`, `u2 = 0`
+- On $\Gamma_{D_{r,z}}$: `pipetteContactBoundary` and `bottomBoundary`:  `u1 = 0`, `u2 = 0`
+- On $\Gamma_{D_{r}}$: `centralLineBoundary`: `u1 = 0` (axisymmetry condition)
 
 Applied load:
 
-- On `pipetteInnerBoundary`: normal pressure `-pressureBoundary` in the `u2` direction.
+- On $\Gamma_{D_{P}}$: `pipetteInnerBoundary`: normal pressure `-pressureBoundary` in the `u2` direction
 
 ## Outputs
 
@@ -92,15 +113,9 @@ Measurement point (default):
 - `x0 = 0.0 m`
 - `y0 = 0.0 m`
 
-During execution, the script also:
-
-- Prints per-frequency diagnostics to stdout.
-- Plots mesh and displacement-magnitude visualization.
-
 ## Requirements
 
-- FreeFem++ available in PATH as `FreeFem++.exe`.
-- Windows PowerShell or terminal capable of launching FreeFem++.
+- Installed [FreeFem++](https://freefem.org/), which is available in PATH as `FreeFem++.exe`. This repository was tested using version 4.15
 
 ## Run
 
