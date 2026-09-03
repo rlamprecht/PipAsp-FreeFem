@@ -44,10 +44,10 @@ Term-by-term meaning:
 
 Geometry parameters in SI units:
 
-- `radiusPipetteInner`: $r_i = 1.5\,\text{mm}$ 
-- `radiusPipetteOuter`: $r_o = 2.5\,\text{mm}$ 
-- `radiusDomain`: $r_s = 50\,\text{mm}$ 
-- `heightDomain`: $h_s = 10\,\text{mm}$ 
+- `radiusPipetteInner`: $r_i = 1.5 \text{mm}$ 
+- `radiusPipetteOuter`: $r_o = 2.5 \text{mm}$ 
+- `radiusDomain`: $r_s = 50 \text{mm}$ 
+- `heightDomain`: $h_s = 10 \text{mm}$ 
 
 Discretization controls:
 
